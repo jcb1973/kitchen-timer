@@ -1,0 +1,49 @@
+"""Config for timerd.
+
+Reads a per-project `.creds` (INI, gitignored, mode 600) following the house
+convention, and falls back to environment variables + sane defaults so the
+daemon also runs on a dev machine with no `.creds` present.
+"""
+import configparser
+import os
+from dataclasses import dataclass
+
+
+@dataclass
+class Config:
+    # matrixd — where timer screens are painted
+    matrix_url: str = "http://127.0.0.1:8081"
+    matrix_token: str = ""
+    # buzzerd — the beep at zero. Empty url = not built yet -> beeps are stubbed.
+    buzzer_url: str = ""
+    buzzer_token: str = ""
+    # timerd's own HTTP listener (encoderd POSTs events here)
+    listen_host: str = "127.0.0.1"
+    listen_port: int = 8083          # matrixd=8081, summond=8082, timerd=8083
+    listen_token: str = ""           # optional; if set, POSTs need X-Auth-Token
+    # behaviour
+    default_set_s: int = 300         # SET opens at 5:00
+    screen_ttl: int = 30             # matrixd slot ttl; > SET idle timeout (20s)
+
+
+def load(path: str = ".creds") -> Config:
+    cfg = Config()
+    cp = configparser.ConfigParser()
+    if os.path.exists(path):
+        cp.read(path)
+        cfg.matrix_url = cp.get("matrix", "url", fallback=cfg.matrix_url)
+        cfg.matrix_token = cp.get("matrix", "token", fallback=cfg.matrix_token)
+        cfg.buzzer_url = cp.get("buzzer", "url", fallback=cfg.buzzer_url)
+        cfg.buzzer_token = cp.get("buzzer", "token", fallback=cfg.buzzer_token)
+        cfg.listen_host = cp.get("timer", "listen_host", fallback=cfg.listen_host)
+        cfg.listen_port = cp.getint("timer", "listen_port", fallback=cfg.listen_port)
+        cfg.listen_token = cp.get("timer", "token", fallback=cfg.listen_token)
+        cfg.default_set_s = cp.getint("timer", "default_set_s", fallback=cfg.default_set_s)
+        cfg.screen_ttl = cp.getint("timer", "screen_ttl", fallback=cfg.screen_ttl)
+
+    # env overrides — convenient for dev/tests
+    cfg.matrix_url = os.environ.get("MATRIX_URL", cfg.matrix_url)
+    cfg.matrix_token = os.environ.get("MATRIX_TOKEN", cfg.matrix_token)
+    cfg.default_set_s = int(os.environ.get("TIMER_DEFAULT_SET_S", cfg.default_set_s))
+    cfg.listen_port = int(os.environ.get("TIMER_PORT", cfg.listen_port))
+    return cfg
