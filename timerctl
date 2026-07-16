@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Drive timerd by hand — stands in for the rotary encoder during testing.
+# Targets kitchen-pi.local:8083 by default; override with TIMER_HOST / TIMER_PORT.
+#
+#   ./timerctl start      begin a session (SET opens at the default)
+#   ./timerctl cw|ccw     rotate a detent (+/- 30 s)
+#   ./timerctl press      short press  (start / cancel-at-0:00 / stop / ack)
+#   ./timerctl long       long press   (bail out)
+#   ./timerctl status     {active, focus, state, seconds}
+#   ./timerctl health
+set -euo pipefail
+host="${TIMER_HOST:-kitchen-pi.local}"; port="${TIMER_PORT:-8083}"
+base="http://$host:$port"
+post() { curl -s -X POST "$base/input" -H 'Content-Type: application/json' -d "{\"event\":\"$1\"}"; }
+case "${1:-}" in
+  start)  curl -s -X POST "$base/start" ;;
+  cw)     post rotate_cw ;;
+  ccw)    post rotate_ccw ;;
+  press)  post press_short ;;
+  long)   post press_long ;;
+  status) curl -s "$base/status" ;;
+  health) curl -s "$base/health" ;;
+  *) echo "usage: timerctl {start|cw|ccw|press|long|status|health}" >&2; exit 1 ;;
+esac
+echo
