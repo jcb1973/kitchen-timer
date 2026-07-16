@@ -1,0 +1,18 @@
+[Unit]
+Description=timerd - countdown timer for the kitchen LED sign
+After=network-online.target matrixd.service
+Wants=matrixd.service
+
+[Service]
+Type=simple
+User=jcb1973
+# WorkingDirectory is the checkout so timerd finds its .creds (INI, mode 600)
+# beside it. timerd has no GPIO and needs no privileges - unlike encoderd it
+# writes nothing to its CWD, so no RuntimeDirectory is required.
+WorkingDirectory=/home/jcb1973/kitchen-timer
+ExecStart=/usr/bin/python3 /home/jcb1973/kitchen-timer/timerd.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

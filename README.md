@@ -86,6 +86,18 @@ John's go-ahead.
 
 ## Deploy (kitchen-pi)
 
-Not deployed yet. When ready: `git pull` on kitchen-pi + a systemd unit
-(`timerd.service`, user with no special privileges — timerd has no GPIO of its
-own). Then add the `timerd` line to `infra/README.md` under kitchen-pi.
+Runs as **`timerd.service`** (systemd, user `jcb1973`, no privileges — no GPIO of
+its own; the buzzer will be reached over HTTP via buzzerd). The unit is symlinked
+into the checkout, matching matrixd/encoderd:
+
+```sh
+# code currently lands via rsync from the Mac (repo not on GitHub yet):
+rsync -az --exclude='.git' --exclude='.creds' ./ jcb1973@kitchen-pi.local:kitchen-timer/
+# one-time install:
+sudo ln -sf /home/jcb1973/kitchen-timer/timerd.service /etc/systemd/system/timerd.service
+sudo systemctl daemon-reload && sudo systemctl enable --now timerd
+```
+
+`.creds` on the Pi binds `127.0.0.1` (the knob/encoderd is the only client). Bind
+`0.0.0.0` temporarily if you want to drive it from the Mac with `timerctl`.
+Recorded in `infra/README.md` under kitchen-pi.
