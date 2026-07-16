@@ -91,7 +91,7 @@ its own; the buzzer will be reached over HTTP via buzzerd). The unit is symlinke
 into the checkout, matching matrixd/encoderd:
 
 ```sh
-# code currently lands via rsync from the Mac (repo not on GitHub yet):
+# code currently lands via rsync from the Mac (the Pi copy is not a git checkout yet):
 rsync -az --exclude='.git' --exclude='.creds' ./ jcb1973@kitchen-pi.local:kitchen-timer/
 # one-time install:
 sudo ln -sf /home/jcb1973/kitchen-timer/timerd.service /etc/systemd/system/timerd.service
