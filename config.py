@@ -23,7 +23,7 @@ class Config:
     listen_token: str = ""           # optional; if set, POSTs need X-Auth-Token
     # behaviour
     default_set_s: int = 300         # SET opens at 5:00
-    screen_ttl: int = 30             # matrixd slot ttl; > SET idle timeout (20s)
+    # (matrixd slot TTLs are derived per-screen from the timeouts in clients.py)
 
 
 def load(path: str = ".creds") -> Config:
@@ -39,7 +39,6 @@ def load(path: str = ".creds") -> Config:
         cfg.listen_port = cp.getint("timer", "listen_port", fallback=cfg.listen_port)
         cfg.listen_token = cp.get("timer", "token", fallback=cfg.listen_token)
         cfg.default_set_s = cp.getint("timer", "default_set_s", fallback=cfg.default_set_s)
-        cfg.screen_ttl = cp.getint("timer", "screen_ttl", fallback=cfg.screen_ttl)
 
     # env overrides — convenient for dev/tests
     cfg.matrix_url = os.environ.get("MATRIX_URL", cfg.matrix_url)

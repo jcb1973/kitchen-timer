@@ -10,34 +10,48 @@ import logging
 import urllib.error
 import urllib.request
 
+from statemachine import DONE_TIMEOUT_S, SET_IDLE_TIMEOUT_S
+
 log = logging.getLogger("timerd.clients")
 
 
 # --- screen rendering -------------------------------------------------------
 #
-# INTEGRATION POINT. render_screen() turns a Render effect into the `draw`
-# payload matrixd's POST /screen expects. The exact content schema (does
-# matrixd take draw-ops with a font, or a raw framebuffer?) still needs
-# confirming against matrixd's source -- see kitchen-sign. When it's confirmed,
-# THIS is the only function that changes; the state machine and daemon don't.
-# Until then it emits a self-describing semantic dict.
+# render_screen() maps a Render effect to matrixd's POST /screen payload. The
+# schema (confirmed against matrixd.py in kitchen-sign): mode static|flash, a
+# `text` picture ("|" splits lines), `font` (a name, or a per-line list),
+# palette `color`, and `ttl`. This is the one place that knows the matrixd wire
+# format; the state machine and daemon stay format-free.
+#
+# We drive a precise MM:SS by repainting each second (RUNNING), rather than
+# matrixd's native `countdown` mode, whose fmt_remaining() is coarse ("4m" until
+# the final minute). DONE is posted once as mode "flash" so matrixd blinks it.
+
+# TTLs are derived from the state-machine timeouts so a slot can never expire
+# out from under the state it represents. RUNNING is re-posted every second, so
+# it only needs to outlive a single missed tick.
+SET_TTL = SET_IDLE_TIMEOUT_S + 5
+RUNNING_TTL = 5
+DONE_TTL = DONE_TIMEOUT_S + 5
+
 
 def _mmss(seconds: int) -> str:
     return f"{seconds // 60}:{seconds % 60:02d}"
 
 
 def render_screen(effect) -> dict:
-    """Map a Render(kind, seconds, phase) effect -> matrixd draw payload."""
+    """Map a Render(kind, seconds) effect -> matrixd draw payload (mode, text,
+    font, color, ttl). name + layer are added by the daemon."""
     kind = effect.kind
     if kind == "done":
-        # flash: phase 1 shows DONE, phase 0 blanks it
-        return {"text": "DONE" if effect.phase else "", "style": "alert", "big": True}
+        return {"mode": "flash", "text": "DONE", "font": "huge", "color": "red", "ttl": DONE_TTL}
     if kind == "set":
-        if effect.seconds == 0:
-            return {"text": "CANCEL", "label": "timer", "style": "dim"}   # 0:00 sentinel
-        return {"text": _mmss(effect.seconds), "label": "SET", "style": "set", "big": True}
-    # running
-    return {"text": _mmss(effect.seconds), "style": "run", "big": True}
+        if effect.seconds == 0:                                   # 0:00 sentinel
+            return {"mode": "static", "text": "CANCEL", "font": "big", "color": "red", "ttl": SET_TTL}
+        return {"mode": "static", "text": f"SET|{_mmss(effect.seconds)}",
+                "font": ["small", "huge"], "color": "amber", "ttl": SET_TTL}
+    # running: big precise time, repainted every second
+    return {"mode": "static", "text": _mmss(effect.seconds), "font": "huge", "color": "amber", "ttl": RUNNING_TTL}
 
 
 # --- matrixd ----------------------------------------------------------------
@@ -62,8 +76,9 @@ class MatrixClient:
             log.warning("matrixd %s failed: %s", path, e)
             return None
 
-    def screen(self, name: str, layer: str, ttl: int, draw: dict):
-        return self._post("/screen", {"name": name, "layer": layer, "ttl": ttl, **draw})
+    def screen(self, name: str, layer: str, draw: dict):
+        # draw already carries mode/text/font/color/ttl from render_screen()
+        return self._post("/screen", {"name": name, "layer": layer, **draw})
 
     def clear(self, name: str):
         return self._post("/clear", {"name": name})

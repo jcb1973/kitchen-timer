@@ -15,7 +15,7 @@ class FakeMatrix:
         self.screens = []   # list of draw dicts
         self.clears = []
 
-    def screen(self, name, layer, ttl, draw):
+    def screen(self, name, layer, draw):
         self.screens.append(draw)
 
     def clear(self, name):
@@ -41,13 +41,13 @@ class DaemonWiring(unittest.TestCase):
         d, m, _ = make(default_set_s=300)
         st = d.start_session()
         self.assertEqual(st, {"active": True, "focus": True, "state": "set", "seconds": 300})
-        self.assertEqual(m.screens[-1]["text"], "5:00")
+        self.assertEqual(m.screens[-1]["text"], "SET|5:00")
 
     def test_rotate_repaints(self):
         d, m, _ = make(default_set_s=300)
         d.start_session()
         d.feed(Event.ROTATE_CW)
-        self.assertEqual(m.screens[-1]["text"], "5:30")
+        self.assertEqual(m.screens[-1]["text"], "SET|5:30")
 
     def test_start_then_run_to_done_beeps(self):
         d, m, b = make(default_set_s=2)

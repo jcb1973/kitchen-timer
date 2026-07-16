@@ -137,11 +137,11 @@ class Done(unittest.TestCase):
             beeps += sum(1 for e in eff if isinstance(e, Beep))
         self.assertEqual(beeps, 1)                 # exactly one re-beep per interval
 
-    def test_flash_phase_alternates(self):
+    def test_done_ticks_dont_repaint(self):
+        # matrixd's flash mode owns the blink; DONE ticks only re-beep
         m = self._to_done()
-        p1 = m.handle(Event.TICK)[0].phase
-        p2 = m.handle(Event.TICK)[0].phase
-        self.assertNotEqual(p1, p2)
+        for _ in range(DONE_REBEEP_S - 1):
+            self.assertEqual(m.handle(Event.TICK), [])
 
     def test_auto_dismiss(self):
         m = self._to_done()

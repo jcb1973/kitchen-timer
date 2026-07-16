@@ -45,11 +45,11 @@ class Event(Enum):
 @dataclass(frozen=True)
 class Render:
     """Paint a timer screen. `kind` is set|running|done; `seconds` is the value
-    to show (the candidate duration in SET, the remaining time in RUNNING).
-    `phase` alternates 0/1 each second so the render layer can flash DONE."""
+    to show (the candidate duration in SET, the remaining time in RUNNING). DONE
+    is posted once and matrixd's own `flash` mode blinks it, so there's no
+    per-frame flashing to drive from here."""
     kind: str
     seconds: int = 0
-    phase: int = 0
 
 
 @dataclass(frozen=True)
@@ -143,7 +143,7 @@ class TimerMachine:
                 self.remaining_s = 0
                 self.state = State.DONE
                 self._done_s = 0
-                return [Render("done", 0, phase=1), Beep("done")]
+                return [Render("done"), Beep("done")]
             return [Render("running", self.remaining_s)]
         if event in (Event.PRESS_SHORT, Event.PRESS_LONG):
             return self._exit()                # stop / dismiss a running timer
@@ -158,11 +158,9 @@ class TimerMachine:
             self._done_s += 1
             if self._done_s >= DONE_TIMEOUT_S:
                 return self._exit()            # give up waiting, reveal the clock
-            phase = self._done_s % 2
-            effects = [Render("done", 0, phase=phase)]
             if self._done_s % DONE_REBEEP_S == 0:
-                effects.append(Beep("done"))
-            return effects
+                return [Beep("done")]          # matrixd owns the flash; we re-beep
+            return []
         return []
 
     def _exit(self):

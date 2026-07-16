@@ -64,19 +64,25 @@ python3 timerd.py
 
 Tests (no hardware, no network): `python3 -m unittest -v`
 
-## Two integration seams still open
+The **matrixd `/screen` schema is confirmed** (against matrixd.py in
+kitchen-sign): `render_screen()` emits real fields — `mode: static` MM:SS
+repainted every second, and `mode: flash` for DONE so matrixd blinks it. We
+deliberately do *not* use matrixd's native `countdown` mode: its `fmt_remaining`
+is coarse (`4m` until the last minute), and a kitchen timer wants true seconds.
+
+## What's left to wire
 
 1. **buzzerd** — the beep. `BuzzerClient` is stubbed: with no `[buzzer] url` it
    logs what it *would* play. When the shared **buzzerd** beep service exists
    (owns the GPIO-9 piezo, `POST /beep {pattern}`), set its url in `.creds` and
    the DONE beep starts working — no code change.
-2. **matrixd draw payload** — `render_screen()` in `clients.py` is the *only*
-   place that knows matrixd's `/screen` content schema, and it currently emits a
-   best-guess semantic dict. Confirm the real schema against matrixd (kitchen-sign
-   repo) and adjust that one function.
+2. **encoderd** (in the kitchen-sign repo): add a TIMER menu entry that POSTs
+   `/start`, forwards knob events to `/input`, and reclaims the menu when
+   `/status` reports `focus: false`. Not in this repo.
 
-And the encoderd side (in the kitchen-sign repo): add a TIMER menu entry that
-POSTs `/start` then forwards events to `/input`. Not in this repo.
+A live on-panel test (writing to the real sign) is the natural next check once
+one of those is in place — it changes what the kitchen sign shows, so it needs
+John's go-ahead.
 
 ## Deploy (kitchen-pi)
 

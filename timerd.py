@@ -94,7 +94,7 @@ class TimerDaemon:
     def _run_effects(self, effects):
         for e in effects:
             if isinstance(e, Render):
-                self.matrix.screen(self.NAME, self.LAYER, self.cfg.screen_ttl, render_screen(e))
+                self.matrix.screen(self.NAME, self.LAYER, render_screen(e))
             elif isinstance(e, Beep):
                 self.buzzer.beep(e.pattern)          # STUB until buzzerd exists
             elif isinstance(e, Clear):
