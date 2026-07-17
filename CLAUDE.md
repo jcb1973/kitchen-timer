@@ -20,11 +20,15 @@ kitchen-pi next to `matrixd`. Pure-Python, **stdlib only** (no third-party deps)
 - The **buzzer is a shared resource with its own owner** (`buzzerd`), not owned
   by the timer — timerd is just a client. Never drive the buzzer GPIO from here.
 
-## What's left to wire
+## Both seams are wired now
 
-- `BuzzerClient.beep()` is **stubbed** until buzzerd exists (logs, no sound).
-  Wiring it is config-only: set `[buzzer] url` in `.creds`.
-- **encoderd** (kitchen-sign repo) needs a TIMER menu entry that POSTs `/start`,
+- `BuzzerClient.beep()` is live on kitchen-pi (**buzzerd**, `:8084`, wired
+  2026-07-17 — config-only, no code change). With no `[buzzer] url` — dev
+  machines — it logs instead of beeping; that fallback is intended, not a stub
+  to remove, and the `STUB` wording in that log line is historical.
+  `{"pattern": "done"}` is the contract buzzerd was built to accept: buzzerd
+  follows this client, not the reverse.
+- **encoderd** (kitchen-sign repo) has its TIMER menu entry: it POSTs `/start`,
   forwards events to `/input`, and reclaims the menu on `focus: false`.
 
 The matrixd `/screen` schema is **confirmed** and `render_screen()` emits real

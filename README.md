@@ -70,24 +70,29 @@ repainted every second, and `mode: flash` for DONE so matrixd blinks it. We
 deliberately do *not* use matrixd's native `countdown` mode: its `fmt_remaining`
 is coarse (`4m` until the last minute), and a kitchen timer wants true seconds.
 
-## What's left to wire
+## The beep
 
-1. **buzzerd** — the beep. `BuzzerClient` is stubbed: with no `[buzzer] url` it
-   logs what it *would* play. When the shared **buzzerd** beep service exists
-   (owns the GPIO-9 piezo, `POST /beep {pattern}`), set its url in `.creds` and
-   the DONE beep starts working — no code change.
-2. **encoderd** (in the kitchen-sign repo): add a TIMER menu entry that POSTs
-   `/start`, forwards knob events to `/input`, and reclaims the menu when
-   `/status` reports `focus: false`. Not in this repo.
+**buzzerd** (its own repo, `127.0.0.1:8084` on kitchen-pi) owns the piezo; timerd
+is just a client. At zero `BuzzerClient` POSTs `{"pattern": "done"}` and re-sends
+it every 3 s until the knob is pressed — it does *not* call `/stop` on acknowledge,
+which is why buzzerd's patterns are all finite. Wiring was config-only (`[buzzer]
+url` + `token` in `.creds`, done 2026-07-17). With no url set — any dev machine —
+the same call just logs what it would play.
 
-A live on-panel test (writing to the real sign) is the natural next check once
-one of those is in place — it changes what the kitchen sign shows, so it needs
-John's go-ahead.
+## The knob
+
+**encoderd** (kitchen-sign repo) drives this and is live: **TIMER** on the knob
+menu is a local action, not a summond producer — it POSTs `/start`, forwards
+rotate/press to `/input`, and reclaims the menu when `/status` reports
+`focus: false`. Nothing in this repo talks to the encoder directly.
+
+The full chain — knob → timerd → matrixd (paint) + buzzerd (beep) — has been
+verified live on the sign.
 
 ## Deploy (kitchen-pi)
 
 Runs as **`timerd.service`** (systemd, user `jcb1973`, no privileges — no GPIO of
-its own; the buzzer will be reached over HTTP via buzzerd). The unit is symlinked
+its own; the buzzer is reached over HTTP via buzzerd). The unit is symlinked
 into the checkout, matching matrixd/encoderd:
 
 ```sh

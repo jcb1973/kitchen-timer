@@ -1,7 +1,7 @@
 """HTTP clients for the two devices timerd drives, plus the screen renderer.
 
   MatrixClient  -> matrixd (paints the timer screen; owns nothing itself)
-  BuzzerClient  -> buzzerd (the beep at zero) -- STUBBED until buzzerd exists
+  BuzzerClient  -> buzzerd (the beep at zero); logs instead when no url is set
 
 Stdlib only (urllib), so the daemon has zero third-party deps.
 """
@@ -87,10 +87,13 @@ class MatrixClient:
 # --- buzzerd (the seam) -----------------------------------------------------
 
 class BuzzerClient:
-    """Calls buzzerd's POST /beep. buzzerd isn't built yet, so with no url
-    configured this only logs what it *would* play. When buzzerd lands, set
-    [buzzer] url in .creds and the same call starts making noise -- no other
-    code changes."""
+    """Calls buzzerd's POST /beep. With no url configured it only logs what it
+    *would* play, which is how timerd runs on a dev machine; on kitchen-pi
+    [buzzer] url points at buzzerd (127.0.0.1:8084) and the same call makes the
+    noise. buzzerd owns the pin -- never drive the buzzer GPIO from here.
+
+    The request shape below is the contract buzzerd accepts; it was built to
+    match this client, so don't reshape it without changing buzzerd too."""
 
     def __init__(self, url: str = "", token: str = "", timeout: float = 2.0):
         self.url = (url or "").rstrip("/")

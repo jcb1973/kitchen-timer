@@ -96,7 +96,7 @@ class TimerDaemon:
             if isinstance(e, Render):
                 self.matrix.screen(self.NAME, self.LAYER, render_screen(e))
             elif isinstance(e, Beep):
-                self.buzzer.beep(e.pattern)          # STUB until buzzerd exists
+                self.buzzer.beep(e.pattern)          # -> buzzerd; logs if no url set
             elif isinstance(e, Clear):
                 self.matrix.clear(self.NAME)
             elif isinstance(e, ReleaseFocus):

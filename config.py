@@ -14,7 +14,8 @@ class Config:
     # matrixd — where timer screens are painted
     matrix_url: str = "http://127.0.0.1:8081"
     matrix_token: str = ""
-    # buzzerd — the beep at zero. Empty url = not built yet -> beeps are stubbed.
+    # buzzerd — the beep at zero. Empty url -> beeps are logged, not played
+    # (dev machines); kitchen-pi points this at buzzerd on 127.0.0.1:8084.
     buzzer_url: str = ""
     buzzer_token: str = ""
     # timerd's own HTTP listener (encoderd POSTs events here)

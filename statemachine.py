@@ -4,7 +4,7 @@ Pure countdown-timer state machine for kitchen-timer (timerd).
 No I/O, no hardware, no network: it consumes semantic input events plus a 1 Hz
 TICK and emits semantic *effects* (render this screen / beep / clear the slot /
 release the knob). The daemon (timerd.py) is what actually executes those
-effects against matrixd and, later, buzzerd. Keeping the logic pure makes the
+effects against matrixd and buzzerd. Keeping the logic pure makes the
 whole interaction unit-testable on any machine, with no encoder, panel, or
 buzzer present.
 
@@ -17,9 +17,9 @@ person selects TIMER from the knob menu, encoderd forwards its events here:
     TICK                     1 Hz, supplied by the daemon
 
 States: SET -> RUNNING -> DONE, with EXIT as the terminal "release the knob".
-The buzzer is not built yet, so DONE emits a Beep effect that the daemon
-currently only logs; the visual DONE screen is the real, permanent behaviour and
-the buzzerd call slots in beside it later.
+DONE emits a Beep effect that the daemon turns into a buzzerd POST (or just a
+log line where no buzzerd is configured); the visual DONE screen stands on its
+own either way.
 """
 from dataclasses import dataclass
 from enum import Enum
@@ -54,8 +54,9 @@ class Render:
 
 @dataclass(frozen=True)
 class Beep:
-    """Ask buzzerd for a named beep pattern. The buzzer isn't wired yet, so the
-    daemon only logs this for now; it becomes a buzzerd POST later."""
+    """Ask buzzerd for a named beep pattern. The daemon turns this into a POST
+    /beep; buzzerd owns the pin and the pattern's actual shape. Patterns must be
+    finite -- DONE re-emits this every DONE_REBEEP_S until acknowledged."""
     pattern: str = "done"
 
 

@@ -6,11 +6,11 @@ url   = http://127.0.0.1:8081
 token = REPLACE_WITH_MATRIX_TOKEN
 
 [buzzer]
-# buzzerd is not built yet. Leave url empty -> beeps are stubbed (logged, silent).
-# When buzzerd lands, set its url + token here and the beep at zero starts working;
-# no code changes needed.
-url   =
-token =
+# buzzerd owns the buzzer and plays the beep at zero. Leave url empty on a dev
+# machine -> beeps are logged, not played. On kitchen-pi this points at buzzerd
+# and the token must match buzzerd's own .creds (both reuse MATRIX_TOKEN).
+url   = http://127.0.0.1:8084
+token = REPLACE_WITH_MATRIX_TOKEN
 
 [timer]
 listen_host  = 127.0.0.1
