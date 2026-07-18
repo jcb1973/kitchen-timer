@@ -31,6 +31,12 @@ class Config:
     listen_token: str = ""           # optional; if set, POSTs need X-Auth-Token
     # behaviour
     default_set_s: int = 300         # SET opens at 5:00
+    # DONE alarm. done_sound is the sound name sent to the beep sink at zero
+    # ("done" is the shared piezo/speaker name; "timer" is a speaker-only clip,
+    # so pair done_sound=timer with beep_sink=audio). done_timeout_s <= 0 makes
+    # the alarm loop until the knob acknowledges it, instead of auto-dismissing.
+    done_sound: str = "done"
+    done_timeout_s: int = 60
     # (matrixd slot TTLs are derived per-screen from the timeouts in clients.py)
 
 
@@ -50,6 +56,8 @@ def load(path: str = ".creds") -> Config:
         cfg.listen_port = cp.getint("timer", "listen_port", fallback=cfg.listen_port)
         cfg.listen_token = cp.get("timer", "token", fallback=cfg.listen_token)
         cfg.default_set_s = cp.getint("timer", "default_set_s", fallback=cfg.default_set_s)
+        cfg.done_sound = cp.get("timer", "done_sound", fallback=cfg.done_sound)
+        cfg.done_timeout_s = cp.getint("timer", "done_timeout_s", fallback=cfg.done_timeout_s)
 
     # env overrides — convenient for dev/tests
     cfg.matrix_url = os.environ.get("MATRIX_URL", cfg.matrix_url)

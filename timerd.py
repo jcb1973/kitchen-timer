@@ -79,7 +79,10 @@ class TimerDaemon:
     # -- session control (also the unit-test surface) --------------------
     def start_session(self):
         with self.lock:
-            self.machine = TimerMachine(self.cfg.default_set_s)
+            self.machine = TimerMachine(
+                self.cfg.default_set_s,
+                done_sound=self.cfg.done_sound,
+                done_timeout_s=self.cfg.done_timeout_s)
             effects = self.machine.start()
         self._run_effects(effects)
         return self.status()

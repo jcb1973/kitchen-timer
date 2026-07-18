@@ -38,13 +38,23 @@ piezo via buzzerd), `audio` (a richer chime via **audiod**, `:8085`), or `both`.
 `BuzzerClient` and `AudioClient` share one `beep(pattern)` interface, so the
 daemon just fans the `Beep` effect out to the selected sinks (`_select_beep_sinks`
 in `timerd.py`); an unknown sink, or `audio` with no client, falls back to the
-buzzer rather than going silent. The **state machine is unchanged** — it still
-emits `Beep("done")`; only the transport moved into config. Keep the default
-`buzzer`: it honours audiod's "the piezo stays timerd's beeper" rule, with audio
-strictly opt-in. audiod owns the USB card — POST to it, never open the card here
-(same discipline as never driving the buzzer GPIO). `AudioClient` sends
-`{"sound": name}`; the *name* is the shared house vocabulary, only the wire key
-differs from buzzerd's `{"pattern": name}`.
+buzzer rather than going silent. Keep the default `buzzer`: it honours audiod's
+"the piezo stays timerd's beeper" rule, with audio strictly opt-in. audiod owns
+the USB card — POST to it, never open the card here (same discipline as never
+driving the buzzer GPIO). `AudioClient` sends `{"sound": name}`; the *name* is
+the shared house vocabulary, only the wire key differs from buzzerd's
+`{"pattern": name}`.
+
+The DONE **sound name and ring duration are also config**, kept out of the pure
+state machine: `TimerMachine(done_sound=..., done_timeout_s=...)`. It emits
+`Beep(self.done_sound)` (default `"done"`), and `done_timeout_s <= 0` turns the
+DONE beep into a **loop that rings until the knob acknowledges it** — no
+auto-dismiss — re-Rendering each `DONE_REBEEP_S` interval so matrixd's DONE slot
+never expires. kitchen-pi runs `done_sound=timer` (audiod's speaker-only spoken
+"Timer done!" clip, ~1.9 s < the 3 s re-beep so it never self-truncates) +
+`beep_sink=audio` + `done_timeout_s=0`. That is an audio-only alarm: `timer` has
+no buzzerd counterpart, so `done_sound=timer` must go with `beep_sink=audio`.
+Changing this behaviour → add a test (the pure machine is the seam).
 
 The matrixd `/screen` schema is **confirmed** and `render_screen()` emits real
 fields (`static` MM:SS repainted per second; `flash` for DONE). We intentionally

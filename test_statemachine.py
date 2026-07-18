@@ -153,5 +153,43 @@ class Done(unittest.TestCase):
         self.assertEqual(kinds(eff), ["Clear", "ReleaseFocus"])
 
 
+class DoneAlarm(unittest.TestCase):
+    """DONE with a custom sound name and no timeout: the looping timer alarm."""
+
+    def _to_done(self, **kw):
+        m = TimerMachine(default_set_s=1, **kw)
+        m.start(); m.handle(Event.PRESS_SHORT); m.handle(Event.TICK)
+        assert m.state == State.DONE
+        return m
+
+    def test_done_sound_is_configurable(self):
+        m = TimerMachine(default_set_s=1, done_sound="timer")
+        m.start(); m.handle(Event.PRESS_SHORT)
+        eff = m.handle(Event.TICK)                 # RUNNING -> DONE
+        self.assertEqual(eff[1], Beep("timer"))
+
+    def test_zero_timeout_never_auto_dismisses(self):
+        m = self._to_done(done_sound="timer", done_timeout_s=0)
+        for _ in range(DONE_TIMEOUT_S * 3):        # well past the old 60 s cap
+            m.handle(Event.TICK)
+            self.assertEqual(m.state, State.DONE)  # still ringing
+
+    def test_looping_alarm_repaints_and_resounds_each_interval(self):
+        # with no timeout, each re-beep also re-Renders to keep the slot alive
+        m = self._to_done(done_sound="timer", done_timeout_s=0)
+        for _ in range(DONE_REBEEP_S - 1):
+            self.assertEqual(m.handle(Event.TICK), [])
+        eff = m.handle(Event.TICK)                 # the interval tick
+        self.assertEqual(kinds(eff), ["Render", "Beep"])
+        self.assertEqual(eff[1], Beep("timer"))
+
+    def test_press_stops_the_looping_alarm(self):
+        m = self._to_done(done_sound="timer", done_timeout_s=0)
+        m.handle(Event.TICK); m.handle(Event.TICK)
+        eff = m.handle(Event.PRESS_SHORT)          # encoder cancel
+        self.assertEqual(m.state, State.EXIT)
+        self.assertEqual(kinds(eff), ["Clear", "ReleaseFocus"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

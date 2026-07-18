@@ -27,3 +27,10 @@ default_set_s = 300
 screen_ttl   = 30
 # DONE beep transport: buzzer (default, the piezo) | audio (USB chime) | both.
 beep_sink    = buzzer
+# DONE alarm sound + timeout. done_sound is the sound name sent at zero: `done`
+# works on either transport; `timer` is a speaker-only clip (a spoken "Timer
+# done!"), so pair it with beep_sink=audio. done_timeout_s <= 0 loops the alarm
+# until the knob acknowledges it (a timer that rings until you stop it); >0
+# auto-dismisses after that many seconds.
+done_sound     = done
+done_timeout_s = 60

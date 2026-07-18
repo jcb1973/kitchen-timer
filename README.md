@@ -87,6 +87,14 @@ speaker via **audiod**, `127.0.0.1:8085`), or `both`. audiod is buzzerd's siblin
 `buzzer` so the piezo remains timerd's beeper unless you opt in; `audio` needs
 `[audio] url` set (empty → logged, like the buzzer).
 
+**What the DONE sound is, and how long it rings**, are also `[timer]` config —
+`done_sound` and `done_timeout_s`. `done_sound=timer` plays audiod's spoken
+"Timer done!" clip (speaker-only, so pair it with `beep_sink=audio`), and
+`done_timeout_s=0` makes the alarm **loop every 3 s until the knob acknowledges
+it** — a timer that rings until you turn it off — instead of the default 60 s
+auto-dismiss. The state machine stays generic: it emits `Beep(done_sound)` and,
+when looping, re-Renders each interval so matrixd's DONE slot never expires.
+
 ## The knob
 
 **encoderd** (kitchen-sign repo) drives this and is live: **TIMER** on the knob

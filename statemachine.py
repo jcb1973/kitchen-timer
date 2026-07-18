@@ -89,12 +89,19 @@ class TimerMachine:
     opening SET render, then feed handle(event) and act on the returned effects.
     """
 
-    def __init__(self, default_set_s: int = DEFAULT_SET_S):
+    def __init__(self, default_set_s: int = DEFAULT_SET_S,
+                 done_sound: str = "done", done_timeout_s: int = DONE_TIMEOUT_S):
         self.state = State.SET
         self.duration_s = _clamp(default_set_s)
         self.remaining_s = 0
         self._idle_s = 0     # seconds since last human input, while in SET
         self._done_s = 0     # seconds since DONE was entered
+        # DONE alarm: which sound to play, and whether it auto-dismisses.
+        # done_timeout_s <= 0 -> the alarm loops until the knob acknowledges it
+        # (a real timer that rings until you turn it off); in that mode we also
+        # re-Render each re-beep so matrixd's DONE slot never expires.
+        self.done_sound = done_sound
+        self.done_timeout_s = done_timeout_s
 
     def start(self):
         """Effects for entering the timer (encoderd just handed us the knob)."""
@@ -144,7 +151,7 @@ class TimerMachine:
                 self.remaining_s = 0
                 self.state = State.DONE
                 self._done_s = 0
-                return [Render("done"), Beep("done")]
+                return [Render("done"), Beep(self.done_sound)]
             return [Render("running", self.remaining_s)]
         if event in (Event.PRESS_SHORT, Event.PRESS_LONG):
             return self._exit()                # stop / dismiss a running timer
@@ -157,10 +164,14 @@ class TimerMachine:
             return self._exit()                # acknowledge -> silence + clear
         if event == Event.TICK:
             self._done_s += 1
-            if self._done_s >= DONE_TIMEOUT_S:
+            if self.done_timeout_s > 0 and self._done_s >= self.done_timeout_s:
                 return self._exit()            # give up waiting, reveal the clock
             if self._done_s % DONE_REBEEP_S == 0:
-                return [Beep("done")]          # matrixd owns the flash; we re-beep
+                if self.done_timeout_s <= 0:
+                    # looping alarm: re-Render to refresh the DONE slot's TTL
+                    # (nothing else repaints it), then re-sound.
+                    return [Render("done"), Beep(self.done_sound)]
+                return [Beep(self.done_sound)]  # matrixd owns the flash; we re-beep
             return []
         return []
 
