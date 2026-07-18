@@ -79,6 +79,14 @@ which is why buzzerd's patterns are all finite. Wiring was config-only (`[buzzer
 url` + `token` in `.creds`, done 2026-07-17). With no url set — any dev machine —
 the same call just logs what it would play.
 
+**Which device makes the DONE sound is a config choice** — `beep_sink` in
+`[timer]`: `buzzer` (default, the piezo), `audio` (a richer chime on the USB
+speaker via **audiod**, `127.0.0.1:8085`), or `both`. audiod is buzzerd's sibling
+(one owner per device) and speaks the same sound *names*, so `AudioClient` POSTs
+`{"sound": "done"}` — the same house name, a different wire key. The default stays
+`buzzer` so the piezo remains timerd's beeper unless you opt in; `audio` needs
+`[audio] url` set (empty → logged, like the buzzer).
+
 ## The knob
 
 **encoderd** (kitchen-sign repo) drives this and is live: **TIMER** on the knob

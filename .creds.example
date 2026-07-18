@@ -12,9 +12,18 @@ token = REPLACE_WITH_MATRIX_TOKEN
 url   = http://127.0.0.1:8084
 token = REPLACE_WITH_MATRIX_TOKEN
 
+[audio]
+# audiod owns the USB speaker and can play a richer DONE chime. Only used when
+# [timer] beep_sink is `audio` or `both`. Leave url empty on a dev machine ->
+# the play is logged, not sounded. On kitchen-pi points at audiod on :8085.
+url   = http://127.0.0.1:8085
+token = REPLACE_WITH_MATRIX_TOKEN
+
 [timer]
 listen_host  = 127.0.0.1
 listen_port  = 8083
 token        =
 default_set_s = 300
 screen_ttl   = 30
+# DONE beep transport: buzzer (default, the piezo) | audio (USB chime) | both.
+beep_sink    = buzzer

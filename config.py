@@ -18,6 +18,13 @@ class Config:
     # (dev machines); kitchen-pi points this at buzzerd on 127.0.0.1:8084.
     buzzer_url: str = ""
     buzzer_token: str = ""
+    # audiod — optional richer DONE chime on the USB speaker. Empty url -> the
+    # play is logged, not sounded; kitchen-pi points this at audiod on :8085.
+    audio_url: str = ""
+    audio_token: str = ""
+    # which sink plays the DONE beep: buzzer (default; the piezo, honouring
+    # audiod's "piezo stays" rule) | audio (the chime) | both (redundant).
+    beep_sink: str = "buzzer"
     # timerd's own HTTP listener (encoderd POSTs events here)
     listen_host: str = "127.0.0.1"
     listen_port: int = 8083          # matrixd=8081, summond=8082, timerd=8083
@@ -36,6 +43,9 @@ def load(path: str = ".creds") -> Config:
         cfg.matrix_token = cp.get("matrix", "token", fallback=cfg.matrix_token)
         cfg.buzzer_url = cp.get("buzzer", "url", fallback=cfg.buzzer_url)
         cfg.buzzer_token = cp.get("buzzer", "token", fallback=cfg.buzzer_token)
+        cfg.audio_url = cp.get("audio", "url", fallback=cfg.audio_url)
+        cfg.audio_token = cp.get("audio", "token", fallback=cfg.audio_token)
+        cfg.beep_sink = cp.get("timer", "beep_sink", fallback=cfg.beep_sink)
         cfg.listen_host = cp.get("timer", "listen_host", fallback=cfg.listen_host)
         cfg.listen_port = cp.getint("timer", "listen_port", fallback=cfg.listen_port)
         cfg.listen_token = cp.get("timer", "token", fallback=cfg.listen_token)
@@ -46,4 +56,5 @@ def load(path: str = ".creds") -> Config:
     cfg.matrix_token = os.environ.get("MATRIX_TOKEN", cfg.matrix_token)
     cfg.default_set_s = int(os.environ.get("TIMER_DEFAULT_SET_S", cfg.default_set_s))
     cfg.listen_port = int(os.environ.get("TIMER_PORT", cfg.listen_port))
+    cfg.beep_sink = os.environ.get("TIMER_BEEP_SINK", cfg.beep_sink)
     return cfg

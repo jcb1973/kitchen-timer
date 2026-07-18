@@ -89,5 +89,49 @@ class DaemonWiring(unittest.TestCase):
         self.assertEqual(len(b.beeps), 2)
 
 
+class BeepSinkRouting(unittest.TestCase):
+    """beep_sink picks which client(s) a DONE Beep drives. FakeBuzzer stands in
+    for both BuzzerClient and AudioClient -- they share the beep() interface."""
+
+    def _run_to_done(self, sink):
+        cfg = config.Config(default_set_s=1, beep_sink=sink)
+        m, buzzer, audio = FakeMatrix(), FakeBuzzer(), FakeBuzzer()
+        d = TimerDaemon(cfg, m, buzzer, audio)
+        d.start_session()
+        d.feed(Event.PRESS_SHORT)                 # SET -> RUNNING (1s)
+        d._tick_once()                            # 1 -> 0 -> DONE (+1 beep)
+        return buzzer, audio
+
+    def test_default_is_buzzer_only(self):
+        buzzer, audio = self._run_to_done("buzzer")
+        self.assertEqual(buzzer.beeps, ["done"])
+        self.assertEqual(audio.beeps, [])
+
+    def test_audio_routes_to_audiod_only(self):
+        buzzer, audio = self._run_to_done("audio")
+        self.assertEqual(buzzer.beeps, [])
+        self.assertEqual(audio.beeps, ["done"])
+
+    def test_both_fires_each(self):
+        buzzer, audio = self._run_to_done("both")
+        self.assertEqual(buzzer.beeps, ["done"])
+        self.assertEqual(audio.beeps, ["done"])
+
+    def test_unknown_sink_falls_back_to_buzzer(self):
+        buzzer, audio = self._run_to_done("trumpet")
+        self.assertEqual(buzzer.beeps, ["done"])
+        self.assertEqual(audio.beeps, [])
+
+    def test_audio_sink_without_client_falls_back_to_buzzer(self):
+        # beep_sink=audio but no AudioClient supplied -> don't go silent.
+        cfg = config.Config(default_set_s=1, beep_sink="audio")
+        m, buzzer = FakeMatrix(), FakeBuzzer()
+        d = TimerDaemon(cfg, m, buzzer)           # no audio arg
+        d.start_session()
+        d.feed(Event.PRESS_SHORT)
+        d._tick_once()
+        self.assertEqual(buzzer.beeps, ["done"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

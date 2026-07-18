@@ -2,7 +2,8 @@
 """timerd — the kitchen-timer daemon.
 
 Owns the whole timer: it holds one TimerMachine session, drives a 1 Hz tick, and
-executes the machine's effects against matrixd (paint) and buzzerd (beep). The
+executes the machine's effects against matrixd (paint) and the configured beep
+sink -- buzzerd (piezo) and/or audiod (USB chime), chosen by `beep_sink`. The
 rotary knob stays dumb -- encoderd just forwards events to this HTTP API:
 
     POST /start          begin a session (encoderd calls this when TIMER is picked)
@@ -20,7 +21,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import config
-from clients import BuzzerClient, MatrixClient, render_screen
+from clients import AudioClient, BuzzerClient, MatrixClient, render_screen
 from statemachine import (
     Beep, Clear, Event, Render, ReleaseFocus, State, TimerMachine,
 )
@@ -32,14 +33,36 @@ class TimerDaemon:
     NAME = "timer"        # matrixd slot owner name
     LAYER = "invoked"     # a person opened it -> invoked layer
 
-    def __init__(self, cfg, matrix, buzzer):
+    def __init__(self, cfg, matrix, buzzer, audio=None):
         self.cfg = cfg
         self.matrix = matrix
         self.buzzer = buzzer
+        self.audio = audio
+        # DONE beep routing, chosen in config. Default "buzzer" keeps the piezo
+        # as timerd's beeper (audiod's "the piezo stays" rule); "audio" swaps in
+        # the USB chime; "both" fires each for redundancy.
+        self.beep_sinks = self._select_beep_sinks(cfg, buzzer, audio)
         self.lock = threading.Lock()       # guards self.machine
         self.machine = None                # active TimerMachine, or None
         self._stop = threading.Event()
         self._tick = threading.Thread(target=self._tick_loop, name="tick", daemon=True)
+
+    @staticmethod
+    def _select_beep_sinks(cfg, buzzer, audio):
+        """Map cfg.beep_sink -> the list of clients a Beep effect drives. Each
+        is a client exposing beep(pattern) (BuzzerClient / AudioClient). Unknown
+        values fall back to the buzzer so a config typo can't go silent."""
+        sink = (getattr(cfg, "beep_sink", "buzzer") or "buzzer").lower()
+        table = {"buzzer": [buzzer], "audio": [audio], "both": [buzzer, audio]}
+        chosen = table.get(sink)
+        if chosen is None:
+            log.warning("unknown beep_sink %r; using buzzer", sink)
+            chosen = [buzzer]
+        sinks = [s for s in chosen if s is not None]
+        if not sinks:                       # e.g. beep_sink=audio with no audio client
+            log.warning("beep_sink %r has no usable client; using buzzer", sink)
+            sinks = [buzzer]
+        return sinks
 
     # -- lifecycle --------------------------------------------------------
     def start_background(self):
@@ -96,7 +119,8 @@ class TimerDaemon:
             if isinstance(e, Render):
                 self.matrix.screen(self.NAME, self.LAYER, render_screen(e))
             elif isinstance(e, Beep):
-                self.buzzer.beep(e.pattern)          # -> buzzerd; logs if no url set
+                for sink in self.beep_sinks:         # buzzerd and/or audiod; logs if no url set
+                    sink.beep(e.pattern)
             elif isinstance(e, Clear):
                 self.matrix.clear(self.NAME)
             elif isinstance(e, ReleaseFocus):
@@ -168,12 +192,14 @@ def main():
         cfg,
         MatrixClient(cfg.matrix_url, cfg.matrix_token),
         BuzzerClient(cfg.buzzer_url, cfg.buzzer_token),
+        AudioClient(cfg.audio_url, cfg.audio_token),
     )
     daemon.start_background()
     server = ThreadingHTTPServer((cfg.listen_host, cfg.listen_port), Handler)
     server.daemon = daemon
-    log.info("timerd on %s:%d  matrix=%s  buzzer=%s",
-             cfg.listen_host, cfg.listen_port, cfg.matrix_url, cfg.buzzer_url or "STUB")
+    log.info("timerd on %s:%d  matrix=%s  buzzer=%s  audio=%s  beep_sink=%s",
+             cfg.listen_host, cfg.listen_port, cfg.matrix_url,
+             cfg.buzzer_url or "STUB", cfg.audio_url or "STUB", cfg.beep_sink)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -1,7 +1,15 @@
-"""HTTP clients for the two devices timerd drives, plus the screen renderer.
+"""HTTP clients for the devices timerd drives, plus the screen renderer.
 
   MatrixClient  -> matrixd (paints the timer screen; owns nothing itself)
-  BuzzerClient  -> buzzerd (the beep at zero); logs instead when no url is set
+  BuzzerClient  -> buzzerd (the piezo beep at zero); logs when no url is set
+  AudioClient   -> audiod  (a richer DONE chime on the USB speaker); logs when
+                   no url is set
+
+BuzzerClient and AudioClient share one `beep(pattern)` interface, so the daemon
+can route the DONE Beep effect to either or both, chosen in config (the
+`beep_sink` setting). Both speak the same house sound *names* (`done`, ...) --
+buzzerd takes `{"pattern": name}`, audiod takes `{"sound": name}`; the transport
+is a deployment choice, not a code one.
 
 Stdlib only (urllib), so the daemon has zero third-party deps.
 """
@@ -114,4 +122,39 @@ class BuzzerClient:
                 return r.status
         except (urllib.error.URLError, OSError) as e:
             log.warning("buzzerd /beep failed: %s", e)
+            return None
+
+
+# --- audiod (the richer DONE sound) -----------------------------------------
+
+class AudioClient:
+    """Calls audiod's POST /play to play a named house sound on the USB speaker
+    (a real chime, not a piezo squawk). Same shape and no-url-logs-instead
+    fallback as BuzzerClient, and the same `beep(pattern)` interface so the
+    daemon treats the two as interchangeable beep sinks.
+
+    audiod owns the sound card -- never open it from here. The wire key differs
+    from buzzerd (`sound`, not `pattern`) but the *name* is the shared one, so a
+    Beep("done") reaches audiod's `done` chime. On kitchen-pi [audio] url points
+    at audiod (127.0.0.1:8085); with no url set it only logs (dev machines)."""
+
+    def __init__(self, url: str = "", token: str = "", timeout: float = 2.0):
+        self.url = (url or "").rstrip("/")
+        self.token = token
+        self.timeout = timeout
+
+    def beep(self, pattern: str):
+        if not self.url:
+            log.info("audio STUB: would play sound=%r", pattern)
+            return None
+        data = json.dumps({"sound": pattern}).encode()
+        headers = {"Content-Type": "application/json"}
+        if self.token:
+            headers["X-Auth-Token"] = self.token
+        req = urllib.request.Request(self.url + "/play", data=data, method="POST", headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                return r.status
+        except (urllib.error.URLError, OSError) as e:
+            log.warning("audiod /play failed: %s", e)
             return None
