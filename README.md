@@ -112,13 +112,15 @@ its own; the buzzer is reached over HTTP via buzzerd). The unit is symlinked
 into the checkout, matching matrixd/encoderd:
 
 ```sh
-# code currently lands via rsync from the Mac (the Pi copy is not a git checkout yet):
-rsync -az --exclude='.git' --exclude='.creds' ./ jcb1973@kitchen-pi.local:kitchen-timer/
-# one-time install:
+# deploy: git push here, git pull on the Pi. The Pi's ~/kitchen-timer is a
+# git checkout of this public repo (https remote, no deploy key needed):
+ssh jcb1973@kitchen-pi.local 'cd ~/kitchen-timer && git pull --ff-only && sudo systemctl restart timerd'
+# one-time install (unit symlinked from the checkout, like matrixd/encoderd):
 sudo ln -sf /home/jcb1973/kitchen-timer/timerd.service /etc/systemd/system/timerd.service
 sudo systemctl daemon-reload && sudo systemctl enable --now timerd
 ```
 
-`.creds` on the Pi binds `127.0.0.1` (the knob/encoderd is the only client). Bind
-`0.0.0.0` temporarily if you want to drive it from the Mac with `timerctl`.
-Recorded in `infra/README.md` under kitchen-pi.
+`.creds` on the Pi binds `127.0.0.1` (the knob/encoderd is the only client), so
+`timerctl` must run **on the Pi** (its default host `kitchen-pi.local` won't reach
+the loopback socket — use `TIMER_HOST=127.0.0.1`, or bind `0.0.0.0` temporarily
+to drive it from the Mac). Recorded in `infra/README.md` under kitchen-pi.
