@@ -22,7 +22,7 @@ class SetMode(unittest.TestCase):
         self.assertEqual(m.state, State.SET)
         self.assertEqual(eff, [Render("set", 300)])
 
-    def test_rotate_steps_by_30s(self):
+    def test_rotate_steps_by_15s(self):
         m = TimerMachine(default_set_s=300)
         m.start()
         self.assertEqual(m.handle(Event.ROTATE_CW), [Render("set", 300 + STEP_S)])
@@ -138,7 +138,8 @@ class Done(unittest.TestCase):
         self.assertEqual(beeps, 1)                 # exactly one re-beep per interval
 
     def test_done_ticks_dont_repaint(self):
-        # matrixd's flash mode owns the blink; DONE ticks only re-beep
+        # non-interval DONE ticks emit nothing (the re-Render+beep lands only on
+        # the DONE_REBEEP_S boundary; matrixd's flash owns the blink between)
         m = self._to_done()
         for _ in range(DONE_REBEEP_S - 1):
             self.assertEqual(m.handle(Event.TICK), [])
@@ -188,6 +189,17 @@ class DoneAlarm(unittest.TestCase):
         m.handle(Event.TICK); m.handle(Event.TICK)
         eff = m.handle(Event.PRESS_SHORT)          # encoder cancel
         self.assertEqual(m.state, State.EXIT)
+        self.assertEqual(kinds(eff), ["Clear", "ReleaseFocus"])
+
+    def test_timed_alarm_repaints_each_interval_then_dismisses(self):
+        # a positive timeout still repaints each interval (so the DONE slot
+        # outlives its TTL for the whole ring), then auto-dismisses at the cap
+        m = self._to_done(done_sound="timer", done_timeout_s=9)
+        for _ in range(DONE_REBEEP_S - 1):
+            m.handle(Event.TICK)
+        self.assertEqual(kinds(m.handle(Event.TICK)), ["Render", "Beep"])
+        while m.state == State.DONE:
+            eff = m.handle(Event.TICK)
         self.assertEqual(kinds(eff), ["Clear", "ReleaseFocus"])
 
 

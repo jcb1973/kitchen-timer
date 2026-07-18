@@ -11,7 +11,7 @@ buzzer present.
 Interaction model (see README). The rotary encoder is owned by encoderd; when a
 person selects TIMER from the knob menu, encoderd forwards its events here:
 
-    ROTATE_CW / ROTATE_CCW   dial the duration in 30 s steps
+    ROTATE_CW / ROTATE_CCW   dial the duration in 15 s steps
     PRESS_SHORT              start  (or, when the dial reads 0:00, cancel)
     PRESS_LONG               bail out from anywhere
     TICK                     1 Hz, supplied by the daemon
@@ -72,7 +72,7 @@ class ReleaseFocus:
 
 # --- tunables ---------------------------------------------------------------
 
-STEP_S = 30                 # one rotary detent = 30 seconds
+STEP_S = 15                 # one rotary detent = 15 seconds
 MAX_S = 60 * 60            # cap the dial at 60:00 so a fast spin can't run away
 DEFAULT_SET_S = 5 * 60     # SET opens showing 5:00
 SET_IDLE_TIMEOUT_S = 20    # abandon SET after 20 s with no human input
@@ -167,11 +167,10 @@ class TimerMachine:
             if self.done_timeout_s > 0 and self._done_s >= self.done_timeout_s:
                 return self._exit()            # give up waiting, reveal the clock
             if self._done_s % DONE_REBEEP_S == 0:
-                if self.done_timeout_s <= 0:
-                    # looping alarm: re-Render to refresh the DONE slot's TTL
-                    # (nothing else repaints it), then re-sound.
-                    return [Render("done"), Beep(self.done_sound)]
-                return [Beep(self.done_sound)]  # matrixd owns the flash; we re-beep
+                # re-Render each interval so the DONE slot's TTL never lapses
+                # while the alarm rings on (a long or infinite done_timeout_s
+                # outlives a single render's TTL), then re-sound.
+                return [Render("done"), Beep(self.done_sound)]
             return []
         return []
 

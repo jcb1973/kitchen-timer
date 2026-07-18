@@ -47,7 +47,7 @@ class DaemonWiring(unittest.TestCase):
         d, m, _ = make(default_set_s=300)
         d.start_session()
         d.feed(Event.ROTATE_CW)
-        self.assertEqual(m.screens[-1]["text"], "SET|5:30")
+        self.assertEqual(m.screens[-1]["text"], "SET|5:15")
 
     def test_start_then_run_to_done_beeps(self):
         d, m, b = make(default_set_s=2)

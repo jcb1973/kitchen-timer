@@ -3,7 +3,7 @@
 # Targets kitchen-pi.local:8083 by default; override with TIMER_HOST / TIMER_PORT.
 #
 #   ./timerctl start      begin a session (SET opens at the default)
-#   ./timerctl cw|ccw     rotate a detent (+/- 30 s)
+#   ./timerctl cw|ccw     rotate a detent (+/- 15 s)
 #   ./timerctl press      short press  (start / cancel-at-0:00 / stop / ack)
 #   ./timerctl long       long press   (bail out)
 #   ./timerctl status     {active, focus, state, seconds}

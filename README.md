@@ -17,7 +17,7 @@ round-trip.
 Menu (encoderd) ──pick TIMER──▶ SET ──press──▶ RUNNING ──hits 0──▶ DONE ──press/timeout──▶ Clock
 ```
 
-- **SET** — rotate = duration in **30 s steps** (capped 60:00, floored 0:00).
+- **SET** — rotate = duration in **15 s steps** (capped 60:00, floored 0:00).
   Panel shows the candidate (`5:00`). **Short-press = start.**
   Dial down to **`0:00` = CANCEL** (a sentinel, mirroring matrixd's
   "empty → clear to baseline" menu entry). **Long-press = bail** from anywhere.
