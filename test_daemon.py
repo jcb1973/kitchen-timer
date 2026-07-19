@@ -30,6 +30,30 @@ class FakeBuzzer:
         self.beeps.append(pattern)
 
 
+class FakeRecogniser:
+    """Stands in for RecogniserClient. Returns a preset name (or None), counting
+    who() calls; `raises=True` simulates a client that blows up mid-call."""
+    def __init__(self, name=None, raises=False):
+        self.name = name
+        self.raises = raises
+        self.calls = 0
+
+    def who(self):
+        self.calls += 1
+        if self.raises:
+            raise RuntimeError("recogniser exploded")
+        return self.name
+
+
+class SyncCaptureDaemon(TimerDaemon):
+    """TimerDaemon whose owner capture runs synchronously (no thread), so tests
+    are deterministic. Exercises the real feed -> _capture_owner wiring."""
+    def _begin_owner_capture(self, machine):
+        if self.recogniser is None:
+            return
+        self._capture_owner(machine)
+
+
 def make(default_set_s=60):
     cfg = config.Config(default_set_s=default_set_s)
     m, b = FakeMatrix(), FakeBuzzer()
@@ -131,6 +155,74 @@ class BeepSinkRouting(unittest.TestCase):
         d.feed(Event.PRESS_SHORT)
         d._tick_once()
         self.assertEqual(buzzer.beeps, ["done"])
+
+
+class OwnerAttribution(unittest.TestCase):
+    """Best-effort owner capture: recognise WHO at the start press, bind it to
+    the timer, use it at completion. A miss or a failure must never break the
+    timer (the countdown runs exactly as it does today)."""
+
+    def _daemon(self, recog, default_set_s=1, owner_sounds=None):
+        cfg = config.Config(default_set_s=default_set_s,
+                            owner_sounds=owner_sounds or {})
+        m, b = FakeMatrix(), FakeBuzzer()
+        d = SyncCaptureDaemon(cfg, m, b, recogniser=recog)
+        return d, m, b
+
+    def _run_to_done(self, d):
+        d.start_session()
+        d.feed(Event.PRESS_SHORT)     # SET -> RUNNING (start transition)
+        d._tick_once()                # 1 -> 0 -> DONE (+beep)
+
+    def test_owner_is_captured_at_the_start_press(self):
+        recog = FakeRecogniser(name="John")
+        d, _, _ = self._daemon(recog)
+        d.start_session()
+        self.assertEqual(recog.calls, 0)              # SET does not capture
+        d.feed(Event.ROTATE_CW)
+        self.assertEqual(recog.calls, 0)              # dialing does not capture
+        d.feed(Event.PRESS_SHORT)                     # the confirming press
+        self.assertEqual(recog.calls, 1)              # captured exactly once
+        self.assertEqual(d.machine.owner, "John")     # stamped on the timer state
+
+    def test_owner_selects_a_per_person_done_sound(self):
+        recog = FakeRecogniser(name="John")
+        d, _, b = self._daemon(recog, owner_sounds={"John": "timer_john"})
+        self._run_to_done(d)
+        self.assertEqual(b.beeps, ["timer_john"])     # owner-aware DONE sound
+
+    def test_owner_lookup_is_case_insensitive(self):
+        recog = FakeRecogniser(name="John")
+        d, _, b = self._daemon(recog, owner_sounds={"john": "timer_john"})
+        self._run_to_done(d)
+        self.assertEqual(b.beeps, ["timer_john"])
+
+    def test_owner_without_a_configured_sound_uses_the_default(self):
+        recog = FakeRecogniser(name="Gosia")          # recognised, but no mapping
+        d, _, b = self._daemon(recog, owner_sounds={"John": "timer_john"})
+        self._run_to_done(d)
+        self.assertEqual(b.beeps, ["done"])           # falls back to done_sound
+
+    def test_no_recognition_falls_back_unchanged(self):
+        recog = FakeRecogniser(name=None)             # nobody recognised
+        d, _, b = self._daemon(recog, owner_sounds={"John": "timer_john"})
+        self._run_to_done(d)
+        self.assertIsNone(d.machine.owner if d.machine else None)
+        self.assertEqual(b.beeps, ["done"])
+
+    def test_a_recogniser_exception_never_aborts_the_timer(self):
+        recog = FakeRecogniser(raises=True)
+        d, m, b = self._daemon(recog, owner_sounds={"John": "timer_john"})
+        self._run_to_done(d)                          # must not raise
+        self.assertEqual(b.beeps, ["done"])           # timer still fired
+        self.assertEqual(m.screens[-1]["text"], "DONE")
+
+    def test_no_recogniser_client_disables_capture(self):
+        # the default daemon (no recogniser arg) never attributes and runs as before.
+        d, _, b = make(default_set_s=1)
+        self.assertIsNone(d.recogniser)
+        d.start_session(); d.feed(Event.PRESS_SHORT); d._tick_once()
+        self.assertEqual(b.beeps, ["done"])
 
 
 if __name__ == "__main__":

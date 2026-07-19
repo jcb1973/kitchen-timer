@@ -95,6 +95,36 @@ it** — a timer that rings until you turn it off — instead of the default 60 
 auto-dismiss. The state machine stays generic: it emits `Beep(done_sound)` and,
 when looping, re-Renders each interval so matrixd's DONE slot never expires.
 
+## Who started it (best-effort attribution)
+
+When a timer **starts** (the press that confirms `SET → RUNNING`), timerd asks
+**recogniserd** (`:8088`, `GET /who?frames=5&window=2s`) who's at the knob and
+binds that name to the timer as its `owner`. The principle is **capture at the
+interaction moment** — never re-recognise at completion, because by then the
+person has walked away. It rides out on the DONE `Beep` and the completion can
+use it.
+
+Everything here is **best-effort and off the critical path**:
+
+- The recogniser call runs on a **background thread**, so the start press paints
+  `RUNNING` and returns instantly — the knob never waits on a camera burst.
+- `RecogniserClient` never raises: no url → disabled (logged), and any failure
+  (unreachable, timeout, nobody recognised) → `owner = None`. A recognition miss
+  can't break a timer.
+- With `owner = None` the DONE announcement is **exactly today's behaviour**.
+
+The **completion announcement** is owner-aware via `[owner_sounds]` in `.creds`
+(owner name → an audiod sound *name*). audiod plays pre-built named clips (it has
+**no runtime TTS**), so a spoken per-person greeting like *"Done, John!"* is a
+Piper-built asset added to audiod's vocabulary and then mapped here; until that
+asset exists the map is empty and everyone gets `done_sound`. The owner is always
+logged regardless. Configured in `[recogniser]` + `[owner_sounds]`; see
+`.creds.example`.
+
+> **Recognition reality:** only **John** is reliably recognised today (Maja's and
+> Gosia's classifier thresholds aren't tuned yet), so attribution is John-only
+> until recogniserd is tuned. See the kitchen-recogniser repo.
+
 ## The knob
 
 **encoderd** (kitchen-sign repo) drives this and is live: **TIMER** on the knob

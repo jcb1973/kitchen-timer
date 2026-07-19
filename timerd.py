@@ -21,7 +21,9 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import config
-from clients import AudioClient, BuzzerClient, MatrixClient, render_screen
+from clients import (
+    AudioClient, BuzzerClient, MatrixClient, RecogniserClient, render_screen,
+)
 from statemachine import (
     Beep, Clear, Event, Render, ReleaseFocus, State, TimerMachine,
 )
@@ -33,11 +35,18 @@ class TimerDaemon:
     NAME = "timer"        # matrixd slot owner name
     LAYER = "invoked"     # a person opened it -> invoked layer
 
-    def __init__(self, cfg, matrix, buzzer, audio=None):
+    def __init__(self, cfg, matrix, buzzer, audio=None, recogniser=None):
         self.cfg = cfg
         self.matrix = matrix
         self.buzzer = buzzer
         self.audio = audio
+        # recogniserd client (best-effort owner attribution). None -> disabled;
+        # the capture step is skipped entirely and every timer stays owner-less.
+        self.recogniser = recogniser
+        # owner name -> audiod sound name for the DONE announcement, normalised
+        # to lowercase keys so the lookup is case-insensitive against the
+        # recogniser's names ("John"). Empty -> everyone gets the default sound.
+        self.owner_sounds = {k.lower(): v for k, v in getattr(cfg, "owner_sounds", {}).items()}
         # DONE beep routing, chosen in config. Default "buzzer" keeps the piezo
         # as timerd's beeper (audiod's "the piezo stays" rule); "audio" swaps in
         # the USB chime; "both" fires each for redundancy.
@@ -92,11 +101,18 @@ class TimerDaemon:
         with self.lock:
             if self.machine is None:
                 return None
+            prev = self.machine.state
             effects = self.machine.handle(event)
-            exited = self.machine.state == State.EXIT
-            if exited:
+            machine = self.machine
+            # the START transition: the press that confirms SET -> RUNNING. This
+            # is the interaction moment we attribute the timer to (not each dial
+            # tick, and not completion -- by then the person has gone).
+            started = prev == State.SET and machine.state == State.RUNNING
+            if machine.state == State.EXIT:
                 self.machine = None
-        self._run_effects(effects)
+        self._run_effects(effects)             # paint RUNNING first -> knob stays snappy
+        if started:
+            self._begin_owner_capture(machine)  # off the critical path, best-effort
         return self.status()
 
     def _tick_once(self):
@@ -116,14 +132,52 @@ class TimerDaemon:
             seconds = m.remaining_s if m.state == State.RUNNING else m.duration_s
             return {"active": True, "focus": True, "state": m.state.value, "seconds": seconds}
 
+    # -- owner attribution (best-effort, off the knob's critical path) ----
+    def _begin_owner_capture(self, machine):
+        """Fire-and-forget the recogniser call on a background thread so the
+        knob's start press returns immediately (RUNNING has already painted).
+        The owner is only needed at completion, seconds away, so a ~2 s burst
+        landing late is fine. Disabled (no recogniser) -> nothing spawns."""
+        if self.recogniser is None:
+            return
+        threading.Thread(target=self._capture_owner, args=(machine,),
+                         name="owner-capture", daemon=True).start()
+
+    def _capture_owner(self, machine):
+        """Ask recogniserd who pressed start and stamp the timer's owner. Wholly
+        best-effort: RecogniserClient.who() never raises, but we still guard so a
+        surprise can't kill the thread, and a miss just leaves owner None."""
+        try:
+            owner = self.recogniser.who()
+        except Exception as e:                       # never propagate into timer logic
+            log.warning("owner capture failed: %s", e)
+            owner = None
+        with self.lock:
+            if self.machine is machine:              # same session still live
+                machine.owner = owner
+        if owner:
+            log.info("timer owner: %s", owner)
+
+    def _beep_pattern(self, beep):
+        """The DONE sound name, owner-aware. If the owner has a configured
+        per-person sound, use it; otherwise the default pattern. audiod plays
+        named clips (no runtime TTS), so a spoken greeting is a pre-built asset
+        keyed by owner here -- not synthesised at completion."""
+        if beep.owner:
+            return self.owner_sounds.get(beep.owner.lower(), beep.pattern)
+        return beep.pattern
+
     # -- effect execution (network I/O, done outside the lock) -----------
     def _run_effects(self, effects):
         for e in effects:
             if isinstance(e, Render):
                 self.matrix.screen(self.NAME, self.LAYER, render_screen(e))
             elif isinstance(e, Beep):
+                pattern = self._beep_pattern(e)      # owner-aware DONE sound
                 for sink in self.beep_sinks:         # buzzerd and/or audiod; logs if no url set
-                    sink.beep(e.pattern)
+                    sink.beep(pattern)
+                if e.owner:
+                    log.info("timer DONE -- owner=%s sound=%s", e.owner, pattern)
             elif isinstance(e, Clear):
                 self.matrix.clear(self.NAME)
             elif isinstance(e, ReleaseFocus):
@@ -196,13 +250,16 @@ def main():
         MatrixClient(cfg.matrix_url, cfg.matrix_token),
         BuzzerClient(cfg.buzzer_url, cfg.buzzer_token),
         AudioClient(cfg.audio_url, cfg.audio_token),
+        RecogniserClient(cfg.recogniser_url, cfg.recogniser_token,
+                         frames=cfg.recogniser_frames, window=cfg.recogniser_window),
     )
     daemon.start_background()
     server = ThreadingHTTPServer((cfg.listen_host, cfg.listen_port), Handler)
     server.daemon = daemon
-    log.info("timerd on %s:%d  matrix=%s  buzzer=%s  audio=%s  beep_sink=%s",
+    log.info("timerd on %s:%d  matrix=%s  buzzer=%s  audio=%s  beep_sink=%s  recogniser=%s",
              cfg.listen_host, cfg.listen_port, cfg.matrix_url,
-             cfg.buzzer_url or "STUB", cfg.audio_url or "STUB", cfg.beep_sink)
+             cfg.buzzer_url or "STUB", cfg.audio_url or "STUB", cfg.beep_sink,
+             cfg.recogniser_url or "STUB")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

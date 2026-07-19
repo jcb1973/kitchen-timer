@@ -61,6 +61,34 @@ fields (`static` MM:SS repainted per second; `flash` for DONE). We intentionally
 avoid matrixd's native `countdown` mode — its remaining-time format is coarse.
 `render_screen()` is still the one place that knows the wire format.
 
+## Owner attribution (best-effort, capture-at-interaction)
+
+The timer records **who started it**. At the START transition only (the press
+confirming `SET → RUNNING`, detected in `TimerDaemon.feed` — not each dial tick,
+not completion), timerd asks **recogniserd** (`RecogniserClient`, `:8088`) who's
+at the knob and stamps `machine.owner`. Principle: recognise at the *interaction
+moment*, never re-capture at completion (the person has gone by then).
+
+Keep this shape:
+- **The pure machine stays pure.** `statemachine.py` only *stores* `owner` (a
+  string or None) and passes it out on the DONE `Beep(owner=...)`; it attaches no
+  meaning. The recogniser **call is I/O and lives in the daemon**, never in the
+  machine. Don't move the network call into `statemachine.py`.
+- **Off the knob's critical path.** Capture runs on a background thread
+  (`_begin_owner_capture`), so the start press paints RUNNING and returns at once.
+  Owner is only needed at completion, seconds later.
+- **Wholly best-effort.** `RecogniserClient.who()` never raises (no url → disabled
+  like buzzer/audio; any failure → None), and `_capture_owner` guards on top. A
+  recognition miss must never touch timer logic. `owner=None` → completion is
+  unchanged.
+- **Completion is owner-aware but audiod-agnostic.** `_beep_pattern` maps
+  `owner → sound name` via `cfg.owner_sounds` (`[owner_sounds]`, case-insensitive).
+  audiod has **no runtime TTS** — it plays pre-built named clips — so a spoken
+  per-person greeting is a Piper asset added to audiod's vocabulary and mapped
+  here, not synthesised at runtime. Empty map (default) → `done_sound` for all.
+- **Recognition reality:** only John is reliably recognised today; Maja/Gosia
+  thresholds are untuned (kitchen-recogniser), so attribution is John-only for now.
+
 ## Conventions (shared across the Pi ecosystem)
 
 - Secrets/config in `.creds` (INI, gitignored, mode 600); see `.creds.example`.

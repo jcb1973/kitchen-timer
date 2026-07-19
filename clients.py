@@ -1,9 +1,11 @@
 """HTTP clients for the devices timerd drives, plus the screen renderer.
 
-  MatrixClient  -> matrixd (paints the timer screen; owns nothing itself)
-  BuzzerClient  -> buzzerd (the piezo beep at zero); logs when no url is set
-  AudioClient   -> audiod  (a richer DONE chime on the USB speaker); logs when
-                   no url is set
+  MatrixClient      -> matrixd     (paints the timer screen; owns nothing itself)
+  BuzzerClient      -> buzzerd     (the piezo beep at zero); logs when no url set
+  AudioClient       -> audiod      (a richer DONE chime on the USB speaker); logs
+                                    when no url is set
+  RecogniserClient  -> recogniserd (who started the timer, at the start press);
+                                    best-effort, returns None on any miss
 
 BuzzerClient and AudioClient share one `beep(pattern)` interface, so the daemon
 can route the DONE Beep effect to either or both, chosen in config (the
@@ -158,3 +160,48 @@ class AudioClient:
         except (urllib.error.URLError, OSError) as e:
             log.warning("audiod /play failed: %s", e)
             return None
+
+
+# --- recogniserd (who started the timer) ------------------------------------
+
+class RecogniserClient:
+    """GETs recogniserd's /who at the moment a timer STARTS and returns the top
+    named person (a name string) or None. This is best-effort attribution: like
+    the buzzer/audio clients, no url configured means it's disabled (it only
+    logs), and *any* failure -- unreachable, bad JSON, a timeout, nobody
+    recognised -- returns None. It never raises, so a recognition miss can never
+    break a timer.
+
+    The burst form (`frames`/`window`) is recogniserd's: it grabs several frames
+    over a short window and returns the single best detection, because a person
+    at the knob often glances down and a lone frame misses the frontal moment.
+    recogniserd owns the camera seam; this is a pure loopback consumer of it.
+
+    Only used at the START transition, off the knob's critical path (the daemon
+    fires it on a background thread), so a generous timeout that outlives the
+    burst window is fine."""
+
+    def __init__(self, url: str = "", token: str = "", frames: int = 5,
+                 window: str = "2s", timeout: float = 5.0):
+        self.url = (url or "").rstrip("/")
+        self.token = token
+        self.frames = frames
+        self.window = window
+        self.timeout = timeout
+
+    def who(self):
+        if not self.url:
+            log.info("recogniser STUB: no url; owner attribution disabled")
+            return None
+        url = f"{self.url}/who?frames={self.frames}&window={self.window}"
+        req = urllib.request.Request(url, method="GET")
+        if self.token:
+            req.add_header("X-Auth-Token", self.token)
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                data = json.loads(r.read())
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            log.warning("recogniserd /who failed: %s", e)
+            return None
+        named = data.get("named") or []
+        return named[0] if named else None

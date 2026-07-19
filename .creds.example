@@ -34,3 +34,23 @@ beep_sink    = buzzer
 # auto-dismisses after that many seconds.
 done_sound     = done
 done_timeout_s = 60
+
+[recogniser]
+# recogniserd (:8088) — WHO started the timer, captured at the start press
+# (best-effort). Leave url empty to disable attribution (just logs, owner stays
+# None); on kitchen-pi leave the loopback default. token reuses MATRIX_TOKEN if
+# unset. frames/window are recogniserd's burst: a few frames over a short window,
+# since a person at the knob often glances down and a lone frame misses them.
+url    = http://127.0.0.1:8088
+token  =
+frames = 5
+window = 2s
+
+[owner_sounds]
+# owner name -> audiod sound NAME for the DONE announcement (case-insensitive).
+# audiod has no runtime TTS, so a spoken per-person greeting must be a pre-built
+# clip in audiod's vocabulary, named here. Empty (the default) -> everyone gets
+# done_sound. Only add a mapping once the clip exists in audiod, e.g.:
+# John  = timer_john
+# NOTE: only John is reliably recognised today (Maja/Gosia thresholds untuned),
+# so attribution is John-only until recogniserd is tuned.

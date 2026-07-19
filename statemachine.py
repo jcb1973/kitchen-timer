@@ -56,8 +56,14 @@ class Render:
 class Beep:
     """Ask buzzerd for a named beep pattern. The daemon turns this into a POST
     /beep; buzzerd owns the pin and the pattern's actual shape. Patterns must be
-    finite -- DONE re-emits this every DONE_REBEEP_S until acknowledged."""
+    finite -- DONE re-emits this every DONE_REBEEP_S until acknowledged.
+
+    `owner` carries the recognised person who started the timer (a name string,
+    or None), captured at the START transition by the daemon and stamped on the
+    machine. It's a passthrough: the pure machine attaches NO meaning to it; the
+    daemon decides how (if at all) to announce the owner at completion."""
     pattern: str = "done"
+    owner: str = None
 
 
 @dataclass(frozen=True)
@@ -96,6 +102,11 @@ class TimerMachine:
         self.remaining_s = 0
         self._idle_s = 0     # seconds since last human input, while in SET
         self._done_s = 0     # seconds since DONE was entered
+        # Who started this timer (a recognised name, or None). Best-effort
+        # attribution: the daemon calls the recogniser ONCE at the START
+        # transition and stamps this; it rides out on the DONE Beep. None (a
+        # miss, or no recogniser) means the completion falls back unchanged.
+        self.owner = None
         # DONE alarm: which sound to play, and whether it auto-dismisses.
         # done_timeout_s <= 0 -> the alarm loops until the knob acknowledges it
         # (a real timer that rings until you turn it off); in that mode we also
@@ -151,7 +162,7 @@ class TimerMachine:
                 self.remaining_s = 0
                 self.state = State.DONE
                 self._done_s = 0
-                return [Render("done"), Beep(self.done_sound)]
+                return [Render("done"), Beep(self.done_sound, owner=self.owner)]
             return [Render("running", self.remaining_s)]
         if event in (Event.PRESS_SHORT, Event.PRESS_LONG):
             return self._exit()                # stop / dismiss a running timer
@@ -170,7 +181,7 @@ class TimerMachine:
                 # re-Render each interval so the DONE slot's TTL never lapses
                 # while the alarm rings on (a long or infinite done_timeout_s
                 # outlives a single render's TTL), then re-sound.
-                return [Render("done"), Beep(self.done_sound)]
+                return [Render("done"), Beep(self.done_sound, owner=self.owner)]
             return []
         return []
 

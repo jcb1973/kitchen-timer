@@ -203,5 +203,35 @@ class DoneAlarm(unittest.TestCase):
         self.assertEqual(kinds(eff), ["Clear", "ReleaseFocus"])
 
 
+class Owner(unittest.TestCase):
+    """The owner rides out on the DONE Beep. The pure machine just carries the
+    string the daemon stamped -- it attaches no meaning and default is None."""
+
+    def _to_done(self, m):
+        m.start(); m.handle(Event.PRESS_SHORT)
+        return m.handle(Event.TICK)                # RUNNING -> DONE
+
+    def test_owner_defaults_to_none_on_the_beep(self):
+        m = TimerMachine(default_set_s=1)
+        eff = self._to_done(m)
+        self.assertEqual(eff[1], Beep("done"))     # Beep("done") == Beep("done", owner=None)
+        self.assertIsNone(eff[1].owner)
+
+    def test_stamped_owner_travels_on_the_beep(self):
+        m = TimerMachine(default_set_s=1)
+        m.owner = "John"                           # what the daemon stamps at start
+        eff = self._to_done(m)
+        self.assertEqual(eff[1], Beep("done", owner="John"))
+
+    def test_owner_also_rides_the_rebeep(self):
+        m = TimerMachine(default_set_s=1, done_timeout_s=0)
+        m.owner = "Maja"
+        self._to_done(m)
+        for _ in range(DONE_REBEEP_S - 1):
+            m.handle(Event.TICK)
+        eff = m.handle(Event.TICK)                 # the interval re-beep
+        self.assertEqual(eff[1], Beep("done", owner="Maja"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
